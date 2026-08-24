@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Opportunity Scoring — FlyRank Capstone</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;line-height:1.65;max-width:960px;margin:0 auto;padding:48px 24px;color:#1f2937;background:#fff}
+h1{font-size:42px;line-height:1.15;margin-bottom:10px;color:#111827}
+h2{margin-top:48px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px}
+h3{margin-top:30px}
+.subtitle{color:#6b7280;font-size:18px}
+.card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:22px;margin:24px 0}
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+th,td{border:1px solid #e5e7eb;padding:9px;text-align:left}
+th{background:#f3f4f6}
+.metric{display:inline-block;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;margin:6px 8px 6px 0;background:#fff}
+.metric strong{font-size:25px;display:block;color:#111827}
+.small{font-size:13px;color:#6b7280}
+a{color:#2563eb}
+svg{max-width:100%;height:auto}
+footer{margin-top:60px;padding-top:24px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:14px}
+</style>
+</head>
+<body>
+<h1>Content Opportunity Scoring</h1>
+<p class="subtitle">A transparent baseline, leakage audit, and ranked content-review workflow</p>
+<p><strong>Author:</strong> Samia Tabassum Chowdhury · <strong>Lane:</strong> Refresh / Content Opportunity Scoring</p>
+
+<div class="card">
+<h2 style="margin-top:0;border:0">Abstract</h2>
+<p>This project asks which content pages should receive review or refresh attention based on observed search-performance and freshness signals. I first built a transparent baseline using content freshness, search visibility, and click-through rate, then evaluated a Random Forest model using the same action proxy. The initial random-split model reached 0.9998 accuracy, but a validation audit showed that this score was inflated because the model included features used directly to construct the action label. After removing those label-generating features and evaluating with a client-grouped split, accuracy fell to 0.6633. The resulting system is therefore best framed as directional decision-support: it can prioritize pages for human review, but it does not establish causal refresh impact or prove that a page will improve after editing.</p>
+</div>
+
+<div>
+<span class="metric"><strong>30,000</strong>dataset rows</span>
+<span class="metric"><strong>44</strong>dataset columns</span>
+<span class="metric"><strong>0.9998</strong>initial accuracy*</span>
+<span class="metric"><strong>0.6633</strong>audited accuracy</span>
+</div>
+<p class="small">*The initial score is shown as an audit finding, not as evidence of trustworthy generalization.</p>
+
+<h2>1. Introduction / Problem Statement</h2>
+<p>Content teams often have more pages to review than they can inspect manually. The decision supported by this project is therefore <strong>which pages should be reviewed first</strong>.</p>
+<p>The baseline uses three transparent signals: staleness (<code>days_since_last_update ≥ 180</code>), visibility (<code>impressions_90d ≥ 500</code>), and low CTR (<code>ctr &lt; 1.0</code>). The goal is not to automate publishing or guarantee a performance lift. It is to create a repeatable queue that helps a human reviewer focus attention where the observed signals are strongest.</p>
+
+<h2>2. Data</h2>
+<p>The Week-4 notebook loaded <code>content_refresh_anonymized.csv</code> with 30,000 rows and 44 columns. The working fields include content identifiers, search-demand fields, content metadata, historical impressions/clicks/sessions, freshness measures, CTR, average position, engagement, scroll behavior, and trend fields.</p>
+<p>The exact warehouse release/date window is not explicitly restated in the W05–W07 result material, so this paper does not invent a more specific release or date range. The public-safe analysis excludes client names, domains, private queries, credentials, and raw private exports.</p>
+
+<h2>3. Methodology</h2>
+<h3>Baseline</h3>
+<ul><li>+2 stale</li><li>+2 visible</li><li>+1 low CTR</li></ul>
+<p>Score 5 → <strong>Refresh Immediately</strong>; score 3–4 → <strong>Review Soon</strong>; score 0–2 → <strong>Monitor</strong>.</p>
+<p>Reason codes: <code>stale_but_visible</code>, <code>stale_content</code>, <code>low_ctr</code>, <code>healthy</code>.</p>
+<h3>Model</h3>
+<p>A Random Forest Classifier was used as the machine-learning alternative. The original feature set included freshness, impressions, CTR, content age, search volume, average position, engagement rate, and scroll rate.</p>
+<h3>Validation and leakage</h3>
+<p>The action label was itself constructed from freshness, impressions, and CTR. Including those same fields as model inputs allowed the model to recover the label-generating rule. The validation audit therefore removed those three fields and used a client-grouped split, preventing the same client from appearing in both training and test data.</p>
+
+<h2>4. Results</h2>
+<table>
+<tr><th>Evaluation</th><th>Accuracy</th><th>Interpretation</th></tr>
+<tr><td>Random split + label-generating features</td><td><strong>0.9998</strong></td><td>Inflated / not trustworthy for generalization</td></tr>
+<tr><td>Client-grouped split + label-generating features removed</td><td><strong>0.6633</strong></td><td>More conservative result used for the paper</td></tr>
+</table>
+<svg viewBox="0 0 760 260" role="img" aria-label="Accuracy comparison">
+<text x="20" y="35" font-size="20">Validation accuracy</text>
+<rect x="220" y="70" width="480" height="48" rx="8" fill="#d1d5db"/>
+<rect x="220" y="70" width="479" height="48" rx="8" fill="#4b5563"/>
+<text x="220" y="105" fill="white" font-size="18">0.9998 — random + leaky</text>
+<rect x="220" y="155" width="480" height="48" rx="8" fill="#d1d5db"/>
+<rect x="220" y="155" width="318" height="48" rx="8" fill="#111827"/>
+<text x="230" y="190" fill="white" font-size="18">0.6633 — grouped + audited</text>
+</svg>
+
+<h3>Feature importance from the original Week-5 model</h3>
+<table>
+<tr><th>Feature</th><th>Importance</th></tr>
+<tr><td>impressions_90d</td><td>0.651047</td></tr>
+<tr><td>ctr</td><td>0.238606</td></tr>
+<tr><td>engagement_rate</td><td>0.032224</td></tr>
+<tr><td>scroll_rate</td><td>0.028770</td></tr>
+<tr><td>days_since_last_update</td><td>0.025104</td></tr>
+<tr><td>avg_position</td><td>0.015256</td></tr>
+<tr><td>content_age_days</td><td>0.006478</td></tr>
+<tr><td>search_volume</td><td>0.002514</td></tr>
+</table>
+<p class="small">Feature importance is descriptive for the evaluated model and is not a causal effect estimate.</p>
+
+<h2>5. Limitations & Honest Framing</h2>
+<ul>
+<li>The action label is a hand-built proxy, not ground truth for content quality or business value.</li>
+<li>The original random-split score was inflated by target leakage.</li>
+<li>Client grouping is more conservative, but it is not a substitute for a true time-forward evaluation.</li>
+<li>Search intent, seasonality, content quality, business priority, competitor changes, and algorithm changes are not fully represented.</li>
+<li>No causal claim is made about refreshing content or changing Google rankings.</li>
+</ul>
+
+<h2>6. Ranked Recommendations</h2>
+<p>The baseline queue prioritizes pages that are old, visible, and/or have low CTR. Examples from the recorded top-ranked queue are shown below.</p>
+<table>
+<tr><th>Rank</th><th>Content ID</th><th>Score</th><th>Reason</th><th>Action</th><th>Impressions</th><th>CTR</th><th>Days since update</th></tr>
+<tr><td>1</td><td><code>content_5feee3994adb</code></td><td>5</td><td>stale_but_visible</td><td>Refresh Immediately</td><td>7,812</td><td>0.01</td><td>194</td></tr>
+<tr><td>2</td><td><code>content_ecb6215e79fd</code></td><td>5</td><td>stale_but_visible</td><td>Refresh Immediately</td><td>4,429</td><td>0.38</td><td>194</td></tr>
+<tr><td>3</td><td><code>content_1bfaa38ff26c</code></td><td>5</td><td>stale_but_visible</td><td>Refresh Immediately</td><td>25,715</td><td>0.23</td><td>194</td></tr>
+<tr><td>4</td><td><code>content_fe16a55cd13d</code></td><td>5</td><td>stale_but_visible</td><td>Refresh Immediately</td><td>4,556</td><td>0.33</td><td>194</td></tr>
+<tr><td>5</td><td><code>content_72496874f806</code></td><td>5</td><td>stale_but_visible</td><td>Refresh Immediately</td><td>821</td><td>0.24</td><td>301</td></tr>
+</table>
+<p><strong>Human workflow:</strong> verify freshness → verify search intent → check position/CTR context → check business importance → decide refresh/rewrite/merge/monitor.</p>
+
+<h2>7. Human Review & No-Go List</h2>
+<p>Human review is required before action. The system should never automatically publish, overwrite, delete, merge, or make causal claims about search performance. A low CTR is not proof of poor content.</p>
+
+<h2>8. Monitoring / Retrain Triggers</h2>
+<ul>
+<li>Input schema changes</li>
+<li>Material distribution shifts in CTR, impressions, or freshness</li>
+<li>New content types or clients outside the evaluated population</li>
+<li>Unexpected changes in action mix</li>
+<li>Declining performance on a newly held-out period</li>
+<li>Changes to the business definition of “refresh”</li>
+</ul>
+<p>A future version should use a true time-aware evaluation and a clean future outcome label whose window starts strictly after the feature window.</p>
+
+<h2>9. Reproducibility</h2>
+<p>Repository: <a href="https://github.com/Samia2310/flyrank-assignment1-week1">github.com/Samia2310/flyrank-assignment1-week1</a></p>
+<ul>
+<li><code>work/notebooks/w04_baseline_score.ipynb</code></li>
+<li><code>work/notebooks/w05_model.ipynb</code></li>
+<li><code>work/notebooks/w06_validation_audit.ipynb</code></li>
+<li><code>work/notebooks/w07_action_playbook.ipynb</code></li>
+<li><code>work/notebooks/capstone.ipynb</code></li>
+</ul>
+
+<h2>10. Acknowledgments & Data Credit</h2>
+<p><strong>Built on the FlyRank ML Internship dataset.</strong> Data source: <a href="https://flyrank.ai">FlyRank</a>.</p>
+<p>This is an internship research exercise and should be interpreted as decision-support analysis rather than a claim about Google's ranking algorithm or causal refresh impact.</p>
+
+<footer>FlyRank Capstone · Content Opportunity Scoring · Samia Tabassum Chowdhury</footer>
+</body>
+</html>
